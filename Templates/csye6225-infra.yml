@@ -5,7 +5,7 @@ Parameters:
   VpcCidrBlock:
     Description: "CIDR Block for VPC"
     Type: String
-    Default : "10.0.5.0/16"
+    Default : "10.0.0.0/16"
 
 
 Resources:
