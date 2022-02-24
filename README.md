@@ -23,5 +23,7 @@
 
 
 ## AWS Networking Commands
-* `aws cloudformation deploy --profile dev --stack-name test1 --region us-east-2 --template-file ./csye6225-infra.yml ` to create stack
+* To create a stack : `aws cloudformation deploy --profile dev --stack-name test1 --region us-east-2 --template-file ./csye6225-infra.yml ` 
 * change `profile` and `region` parameters in the above command as per the use
+* To delete the stack, use the command :  `aws cloudformation delete-stack --profile dev --stack-name test1 --region us-east-2 ` 
+  
