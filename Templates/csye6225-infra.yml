@@ -5,22 +5,8 @@ Parameters:
   VpcCidrBlock:
     Description: "CIDR Block for VPC"
     Type: String
-    Default : "10.0.0.0/16"
+    Default : "10.0.5.0/16"
 
-  PublicSubnet1CIDR:
-    Description: "CIDR Block for Subnet-01"
-    Type: String
-    Default : "10.0.1.0/24"
-  
-  PublicSubnet2CIDR:
-    Description: "CIDR Block for Subnet-02"
-    Type: String
-    Default : "10.0.2.0/24"
-
-  PublicSubnet3CIDR:
-    Description: "CIDR Block for Subnet-03"
-    Type: String
-    Default : "10.0.3.0/24"
 
 Resources:
   myVPC:
@@ -52,7 +38,7 @@ Resources:
     Properties:
       VpcId:
         Ref: myVPC
-      CidrBlock: !Ref PublicSubnet1CIDR
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt myVPC.CidrBlock, 1, 8 ]]
       AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
@@ -64,7 +50,7 @@ Resources:
     Properties:
       VpcId:
         Ref: myVPC
-      CidrBlock: !Ref PublicSubnet2CIDR
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt myVPC.CidrBlock, 2, 8 ]]
       AvailabilityZone: !Select [ 1, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
@@ -76,7 +62,7 @@ Resources:
     Properties:
       VpcId:
         Ref: myVPC
-      CidrBlock: !Ref PublicSubnet3CIDR
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt myVPC.CidrBlock, 3, 8 ]]
       AvailabilityZone: !Select [ 2, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
