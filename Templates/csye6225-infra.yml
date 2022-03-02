@@ -8,11 +8,12 @@ Parameters:
   EC2Instance:
     Type: String
     Default: t2.micro
+    AllowedValues: [t2.micro]
     Description: "EC2Instance AMI"
 
   AMI:
     Type: String
-    Default: "ami-0341aeea105412b57"
+    Default: "ami-05ba41e0963ddb28e"
     Description: "The AMI to use"
 
 Resources:
@@ -114,24 +115,41 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: "ApplicationSecurityGroup"
-      GroupDescription: "Security Group"
+      GroupDescription: "Application Security Group"
       VpcId: !Ref myVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: '22'
-          ToPort: '22'
+          FromPort: 22
+          ToPort: 22
           CidrIp:  0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: '80'
-          ToPort: '80'
+          FromPort: 80
+          ToPort: 80
           CidrIp:  0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: '443'
-          ToPort: '443'
+          FromPort: 443
+          ToPort: 443
           CidrIp:  0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: '3000'
-          ToPort: '3000'
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp:  0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp:  0.0.0.0/0
+        - IpProtocol: -1
+          FromPort: 22
+          ToPort: 22
+          CidrIp:  0.0.0.0/0
+        - IpProtocol: -1
+          FromPort: 443
+          ToPort: 443
+          CidrIp:  0.0.0.0/0
+        - IpProtocol: -1
+          FromPort: 3000
+          ToPort: 3000
           CidrIp:  0.0.0.0/0
 
   Instance:
@@ -139,6 +157,9 @@ Resources:
     Properties:
       ImageId: !Ref AMI
       InstanceType: !Ref EC2Instance
+      SecurityGroupIds: 
+        - !Ref EC2InstanceSecurityGroup
+      SubnetId: !Ref PublicSubnet1
       KeyName: soumya_sshkey
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
