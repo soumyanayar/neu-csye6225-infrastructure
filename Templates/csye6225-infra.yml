@@ -13,7 +13,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-0f1827cef980a36d0"
+    Default: "ami-0428003aa38005181"
     Description: "The AMI to use"
 
 Resources:
