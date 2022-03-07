@@ -18,7 +18,7 @@ Parameters:
 
   S3BucketName:
     Type: String
-    Default: "soumyanayar1-dev.soumyanayar.me"
+    Default: "soumyanayar3-dev.soumyanayar.me"
     Description: "S3Bucket Name"
   
   DBName :
@@ -356,14 +356,13 @@ Resources:
       Roles:
         - !Ref S3BucketIAMRole
   
-
   # Get the created RDS Instance Endpoint
-  RDSInstanceEndpoint:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub RDSInstanceEndpoint
-      Type: String
-      Value: !GetAtt RDSInstance.Endpoint.Address
+  # RDSInstanceEndpoint:
+  #   Type: AWS::SSM::Parameter
+  #   Properties:
+  #     Name: !Sub RDSInstanceEndpoint
+  #     Type: String
+  #     Value: !GetAtt RDSInstance.Endpoint.Address
 
   # Create EC2 Instance
   EC2Instance:
@@ -389,15 +388,17 @@ Resources:
         Fn::Base64:
           !Sub |
           #!/bin/bash
+          DB_HOST=${RDSInstance.Endpoint.Address}
+          AWS_BUCKET_NAME=${S3BucketName}
           sudo yum update -y
           {
-            echo "DB_HOST=!Ref RDSInstanceEndpoint"
+            echo "DB_HOST=$DB_HOST"
             echo "DB_PORT=3306"
-            echo "DB_USERNAME=!Ref DBUsername"
-            echo "DB_PASSWORD=!Ref DBPassword"
-            echo "DB_NAME=!Ref DBName"
+            echo "DB_USERNAME=admin"
+            echo "DB_PASSWORD=1pNxHsm7HlpCCrdDPESy"
+            echo "DB_NAME=my_webserver_db"
             echo "PORT=3000"
-            echo "AWS_BUCKET_NAME=webservice-bucket-5e1889cd-fabf-4425-b16b-c029145b795e"
+            echo "AWS_BUCKET_NAME=$AWS_BUCKET_NAME"
           } >>/home/ec2-user/webservice/app.env
           echo "Going to webservice directory and installing node application"
           cd /home/ec2-user/webservice || exit
