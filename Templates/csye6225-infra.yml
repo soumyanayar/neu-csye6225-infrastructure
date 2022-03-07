@@ -5,7 +5,7 @@ Parameters:
     Type: String
     Default : "10.0.0.0/16"
 
-  EC2Instance:
+  EC2InstanceType:
     Type: String
     Default: t2.micro
     AllowedValues: [t2.micro]
@@ -13,8 +13,28 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-0428003aa38005181"
+    Default: "ami-08f9501cda5dca116"
     Description: "The AMI to use"
+
+  S3BucketName:
+    Type: String
+    Default: "soumyanayar1-dev.soumyanayar.me"
+    Description: "S3Bucket Name"
+  
+  DBName :
+    Type: String
+    Default: "my_webserver_db"
+    Description: "DB Name"
+
+  DBUserName :
+    Type: String
+    Default: "admin"
+    Description: "DB username"
+
+  DBPassword:
+    Type: String
+    Default: "1pNxHsm7HlpCCrdDPESy"
+    Description: "DB Password" 
 
 Resources:
   myVPC:
@@ -85,7 +105,7 @@ Resources:
         - Key: Name
           Value: !Sub Public Routes
 
-  DefaultPublicRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
     Properties:
@@ -110,6 +130,70 @@ Resources:
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet3
+
+  PrivateSubnet1:
+    Type : AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: !Select [ 3, !Cidr [ !GetAtt myVPC.CidrBlock, 4, 8 ]]
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      Tags:
+      - Key: Name
+        Value: !Sub Private Subnet (AZ2)
+
+  PrivateSubnet2:
+    Type : AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: !Select [ 4, !Cidr [ !GetAtt myVPC.CidrBlock, 5, 8 ]]
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      Tags:
+      - Key: Name
+        Value: !Sub Private Subnet (AZ2)
+
+  PrivateSubnet3:
+    Type : AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: !Select [ 5, !Cidr [ !GetAtt myVPC.CidrBlock, 6, 8 ]]
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      Tags:
+      - Key: Name
+        Value: !Sub Private Subnet (AZ3)
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref myVPC
+  
+  # PrivateRoute:
+  #   Type: AWS::EC2::Route
+  #   Properties:
+  #     RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable
 
   EC2InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -152,11 +236,144 @@ Resources:
           ToPort: 3000
           CidrIp:  0.0.0.0/0
 
-  Instance:
+  # Create RDS Parameter Group for MySQL
+  RDSDBParameterGroup:
+    Type: 'AWS::RDS::DBParameterGroup'
+    Properties:
+      Description: CloudFormation Sample MySQL Parameter Group
+      Family: mysql8.0
+      Parameters:
+        sql_mode: IGNORE_SPACE
+        max_allowed_packet: 1024
+        innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}'
+
+  # Create RDS Subnet Group in the VPC
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub RDS Subnet Group
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+
+  # Create Security Group for RDS with inbound rules from EC2 Instance Security Group
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: EC2InstanceSecurityGroup
+    Properties:
+      GroupDescription: !Sub RDS Security Group
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2InstanceSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+
+  # Create RDS Instance with MySQL 8.0 and RDS Subnet Group and Parameter Group
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    DependsOn:
+      - RDSSecurityGroup
+      - RDSSubnetGroup
+      - RDSDBParameterGroup
+    Properties:
+      DBInstanceClass: db.t2.micro
+      DBName: !Ref DBName
+      Engine: mysql
+      EngineVersion: 8.0.27
+      AllocatedStorage: 20
+      MasterUsername: !Ref DBUserName
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBParameterGroupName: !Ref RDSDBParameterGroup
+      PubliclyAccessible: false
+
+  # S3 bucket with encryption and lifecycle
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: MoveToStorageClassStandardIA
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Ref S3BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  
+  # Create IAM Role for EC2 Instance with S3 Bucket Policy
+  S3BucketIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: !Sub S3BucketPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref S3BucketName, "/*" ] ]
+
+  # Create Iam Instance Profile
+  S3BucketIAMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    DependsOn: S3BucketIAMRole
+    Properties:
+      InstanceProfileName: S3BucketIAMInstanceProfile
+      Path: /
+      Roles:
+        - !Ref S3BucketIAMRole
+  
+
+  # Get the created RDS Instance Endpoint
+  RDSInstanceEndpoint:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub RDSInstanceEndpoint
+      Type: String
+      Value: !GetAtt RDSInstance.Endpoint.Address
+
+  # Create EC2 Instance
+  EC2Instance:
     Type: 'AWS::EC2::Instance'
+    DependsOn:
+      - RDSInstance
+      - S3BucketIAMInstanceProfile
     Properties:
       ImageId: !Ref AMI
-      InstanceType: !Ref EC2Instance
+      InstanceType: !Ref EC2InstanceType
       SecurityGroupIds: 
         - !Ref EC2InstanceSecurityGroup
       SubnetId: !Ref PublicSubnet1
@@ -167,9 +384,33 @@ Resources:
             VolumeType: gp2
             DeleteOnTermination: true
             VolumeSize: 20
+      IamInstanceProfile: !Ref S3BucketIAMInstanceProfile
+      UserData:
+        Fn::Base64:
+          !Sub |
+          #!/bin/bash
+          sudo yum update -y
+          {
+            echo "DB_HOST=!Ref RDSInstanceEndpoint"
+            echo "DB_PORT=3306"
+            echo "DB_USERNAME=!Ref DBUsername"
+            echo "DB_PASSWORD=!Ref DBPassword"
+            echo "DB_NAME=!Ref DBName"
+            echo "PORT=3000"
+            echo "AWS_BUCKET_NAME=webservice-bucket-5e1889cd-fabf-4425-b16b-c029145b795e"
+          } >>/home/ec2-user/webservice/app.env
+          echo "Going to webservice directory and installing node application"
+          cd /home/ec2-user/webservice || exit
+          npm install
+          echo "Copying the node server service file to /etc/systemd/system/node-server.service"
+          sudo cp /home/ec2-user/webservice/nodeserver.service /etc/systemd/system/nodeserver.service
+          echo "Enabling and Starting the node server service"
+          sudo systemctl enable nodeserver.service
+          sudo systemctl start nodeserver.service
       Tags:
-      - Key: Name
-        Value: !Ref AWS::StackName
+        - Key: Name
+          Value: !Ref AWS::StackName
+
 Outputs:
   VpcId:
     Description: The VPC ID
@@ -186,3 +427,12 @@ Outputs:
   PublicSubnet3:
     Description: Public Subnet-03
     Value: !Ref PublicSubnet3
+  PrivateSubnet1:
+    Description: Private Subnet-01
+    Value: !Ref PrivateSubnet1
+  PrivateSubnet2:
+    Description: Private Subnet-02
+    Value: !Ref PrivateSubnet2
+  PrivateSubnet3:
+    Description: Private Subnet-03
+    Value: !Ref PrivateSubnet3
