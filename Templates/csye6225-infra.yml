@@ -13,22 +13,27 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-08f9501cda5dca116"
+    Default: "ami-04bb38a1aac3a2f3d"
     Description: "The AMI to use"
 
-  S3BucketName:
+  # S3BucketName:
+  #   Type: String
+  #   Default: "soumyanayar3-dev.soumyanayar.me"
+  #   Description: "S3Bucket Name"
+
+  DBInstanceIdentifierName:
     Type: String
-    Default: "soumyanayar3-dev.soumyanayar.me"
-    Description: "S3Bucket Name"
-  
+    Default: "csye6225"
+    Description: "DBInstance Identifier Name"
+
   DBName :
     Type: String
-    Default: "my_webserver_db"
+    Default: "csye6225"
     Description: "DB Name"
 
   DBUserName :
     Type: String
-    Default: "admin"
+    Default: "csye6225"
     Description: "DB username"
 
   DBPassword:
@@ -262,18 +267,14 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     DependsOn: EC2InstanceSecurityGroup
     Properties:
-      GroupDescription: !Sub RDS Security Group
+      GroupName: "DatabaseSecurityGroup"
+      GroupDescription: "Database Security Group"
       VpcId: !Ref myVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref EC2InstanceSecurityGroup
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          FromPort: 0
-          ToPort: 0
-          CidrIp: 0.0.0.0/0
 
   # Create RDS Instance with MySQL 8.0 and RDS Subnet Group and Parameter Group
   RDSInstance:
@@ -284,6 +285,7 @@ Resources:
       - RDSDBParameterGroup
     Properties:
       DBInstanceClass: db.t2.micro
+      DBInstanceIdentifier: !Ref DBInstanceIdentifierName
       DBName: !Ref DBName
       Engine: mysql
       EngineVersion: 8.0.27
@@ -300,7 +302,17 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref S3BucketName
+      BucketName: 
+        !Join
+          - ''
+          - - 'csye-6225'
+            - !Ref AWS::StackId
+            - '.soumyanayar.me'
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -312,7 +324,7 @@ Resources:
                 TransitionInDays: 30
       Tags:
         - Key: Name
-          Value: !Ref S3BucketName
+          Value: !Ref S3Bucket
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -333,7 +345,7 @@ Resources:
               - sts:AssumeRole
       Path: /
       Policies:
-        - PolicyName: !Sub S3BucketPolicy
+        - PolicyName: WebAppS3
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -344,7 +356,7 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  - !Join [ "", [ "arn:aws:s3:::", !Ref S3BucketName, "/*" ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket, "/*" ] ]
 
   # Create Iam Instance Profile
   S3BucketIAMInstanceProfile:
@@ -389,14 +401,17 @@ Resources:
           !Sub |
           #!/bin/bash
           DB_HOST=${RDSInstance.Endpoint.Address}
-          AWS_BUCKET_NAME=${S3BucketName}
+          AWS_BUCKET_NAME=${S3Bucket}
+          DB_USERNAME=${DBUserName}
+          DB_PASSWORD=${DBPassword}
+          DB_NAME=${DBName}
           sudo yum update -y
           {
             echo "DB_HOST=$DB_HOST"
             echo "DB_PORT=3306"
-            echo "DB_USERNAME=admin"
-            echo "DB_PASSWORD=1pNxHsm7HlpCCrdDPESy"
-            echo "DB_NAME=my_webserver_db"
+            echo "DB_USERNAME=$DB_USERNAME"
+            echo "DB_PASSWORD=$DB_PASSWORD"
+            echo "DB_NAME=$DB_NAME"
             echo "PORT=3000"
             echo "AWS_BUCKET_NAME=$AWS_BUCKET_NAME"
           } >>/home/ec2-user/webservice/app.env
