@@ -13,20 +13,15 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-04bb38a1aac3a2f3d"
+    Default: "ami-0f1d3fafe5496e295"
     Description: "The AMI to use"
-
-  # S3BucketName:
-  #   Type: String
-  #   Default: "soumyanayar3-dev.soumyanayar.me"
-  #   Description: "S3Bucket Name"
 
   DBInstanceIdentifierName:
     Type: String
     Default: "csye6225"
     Description: "DBInstance Identifier Name"
 
-  DBName :
+  DBName:
     Type: String
     Default: "csye6225"
     Description: "DB Name"
@@ -290,6 +285,7 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.27
       AllocatedStorage: 20
+      MultiAZ: false
       MasterUsername: !Ref DBUserName
       MasterUserPassword: !Ref DBPassword
       DBSubnetGroupName: !Ref RDSSubnetGroup
@@ -302,29 +298,28 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: 
-        !Join
-          - ''
-          - - 'csye-6225'
-            - !Ref AWS::StackId
-            - '.soumyanayar.me'
+      BucketName:
+        !Join [
+          "",
+          [
+            "csye6225bucket-",
+            !Select [0, !Split [-, !Select [2, !Split [/, !Ref AWS::StackId]]]],
+            ".",
+            "soumyanayar.me",
+          ],
+        ]     
       PublicAccessBlockConfiguration: 
         BlockPublicAcls: true
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
       LifecycleConfiguration:
         Rules:
-          - Id: MoveToStorageClassStandardIA
+          - Id: MoveToStorageClassStandardToStandardIA
             Status: Enabled
             Transitions:
               - StorageClass: STANDARD_IA
                 TransitionInDays: 30
-      Tags:
-        - Key: Name
-          Value: !Ref S3Bucket
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -354,8 +349,8 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                  - s3:ListBucket
                 Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket, "/*" ] ]
 
   # Create Iam Instance Profile
@@ -381,6 +376,7 @@ Resources:
     Type: 'AWS::EC2::Instance'
     DependsOn:
       - RDSInstance
+      - S3Bucket
       - S3BucketIAMInstanceProfile
     Properties:
       ImageId: !Ref AMI
