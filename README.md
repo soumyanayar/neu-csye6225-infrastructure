@@ -1,5 +1,6 @@
 ## Infrastructure
 
+## Assignment - 03
 ## Steps to create Dev and Demo profiles for resource creation using AWS Cloud Formation
 
 1. Sign-in to AWS (Dev Account) console
@@ -27,3 +28,19 @@
 * change `profile` and `region` parameters in the above command as per the use
 * To delete the stack, use the command :  `aws cloudformation delete-stack --profile dev --stack-name test1 --region us-east-2 ` 
   
+## Assignment - 05
+* The goal of this assignment is to: create an EC2 instance, attach the RDS instance profile to it and use the MYSQL available in the AWS.
+* The flow is : 
+    - Create3 private subnets in the existing VPC
+    - Created a private route table and necessary route table association for private subnets
+    - Created a DB subnet group referencing all 3 private subnets
+    - Created a EC2 security group(For RDS),which has the reference to `application security group` created in Assignment-03. It has a inbound 
+    - Create a RDS instance and attach the parameter group , subnet group and EC2 security group(For RDS) to it
+    - Create a policy to create, get and delete the objects and create an IAM role; Attach the policy to the newly created IAM role.
+    - Create  a Instance profile for S3 bucket which has the reference to the S3 bucket and attach the IAM role to this profile
+    - Now Add the RDS Instance and S3 bucket profile to the EC2 Instance
+
+## Commands to create stack
+- Create a stack `aws cloudformation deploy --profile dev --stack-name assignment5 --region us-west-2 --template-file ./csye6225-infra.yml --capabilities CAPABILITY_NAMED_IAM `
+- Delete a stack `aws cloudformation delete-stack --profile dev --stack-name test1 --region us-east-2`
+- Delete S3 Bucket `aws s3 rm s3://soumyanayar3-dev.soumyanayar.me --recursive`
