@@ -4,6 +4,14 @@ Parameters:
     Description: "CIDR Block for VPC"
     Type: String
     Default : "10.0.0.0/16"
+  
+  EnvironmentName:
+    Description: "Environment Name"
+    Type: String
+    Default : "dev"
+    AllowedValues:
+      - dev
+      - prod
 
   EC2InstanceType:
     Type: String
@@ -171,6 +179,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: !Sub Private Routes
   
   # PrivateRoute:
   #   Type: AWS::EC2::Route
@@ -305,7 +316,8 @@ Resources:
             "csye6225bucket-",
             !Select [0, !Split [-, !Select [2, !Split [/, !Ref AWS::StackId]]]],
             ".",
-            "soumyanayar.me",
+            !Ref EnvironmentName,
+            ".soumyanayar.me",
           ],
         ]     
       PublicAccessBlockConfiguration: 
