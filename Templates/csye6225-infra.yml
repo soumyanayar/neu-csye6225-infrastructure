@@ -21,7 +21,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-0f1d3fafe5496e295"
+    Default: "ami-07ad12791b6cc204e"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -182,11 +182,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub Private Routes
-  
-  # PrivateRoute:
-  #   Type: AWS::EC2::Route
-  #   Properties:
-  #     RouteTableId: !Ref PrivateRouteTable
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -218,34 +213,42 @@ Resources:
           ToPort: 22
           CidrIp:  0.0.0.0/0
         - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp:  0.0.0.0/0
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp:  0.0.0.0/0
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: 3000
-          ToPort: 3000
-          CidrIp:  0.0.0.0/0
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
-        - IpProtocol: -1
-          FromPort: 0
-          ToPort: 0
-          CidrIp:  0.0.0.0/0
-        - IpProtocol: -1
+        - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp:  0.0.0.0/0
-        - IpProtocol: -1
-          FromPort: 443
-          ToPort: 443
-          CidrIp:  0.0.0.0/0
-        - IpProtocol: -1
+        - IpProtocol: tcp
           FromPort: 3000
           ToPort: 3000
-          CidrIp:  0.0.0.0/0
+          DestinationSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0          
 
   # Create RDS Parameter Group for MySQL
   RDSDBParameterGroup:
@@ -271,7 +274,6 @@ Resources:
   # Create Security Group for RDS with inbound rules from EC2 Instance Security Group
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: EC2InstanceSecurityGroup
     Properties:
       GroupName: "DatabaseSecurityGroup"
       GroupDescription: "Database Security Group"
@@ -370,70 +372,208 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     DependsOn: S3BucketIAMRole
     Properties:
-      InstanceProfileName: S3BucketIAMInstanceProfile
+      InstanceProfileName: !Sub '${AWS::StackName}-LaunchTemplateIAMInstanceProfile'
       Path: /
       Roles:
         - !Ref S3BucketIAMRole
-  
-  # Get the created RDS Instance Endpoint
-  # RDSInstanceEndpoint:
-  #   Type: AWS::SSM::Parameter
-  #   Properties:
-  #     Name: !Sub RDSInstanceEndpoint
-  #     Type: String
-  #     Value: !GetAtt RDSInstance.Endpoint.Address
 
-  # Create EC2 Instance
-  EC2Instance:
-    Type: 'AWS::EC2::Instance'
+  # Create Target Group for Load Balancer
+  LoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-TargetGroup'
+      Port: 3000
+      Protocol: HTTP
+      VpcId: !Ref myVPC
+      HealthCheckIntervalSeconds: 90
+      HealthCheckPath: '/healthz'
+      HealthCheckPort: '3000'
+      HealthCheckProtocol: 'HTTP'
+      HealthCheckTimeoutSeconds: 60
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: instance
+      IpAddressType: ipv4
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-TargetGroup'
+  
+  # Create Load Balancer Security Group
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Load Balancer Security Group
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+  
+  # Create Load Balancer
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-LoadBalancer'
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      IpAddressType: ipv4
+      Type: application
+      Tags:
+        - Key: Application
+          Value: WebApp
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-LoadBalancer'
+
+  # Create Listener for Load Balancer
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
+
+  # Create EC2 Launch Template
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     DependsOn:
       - RDSInstance
       - S3Bucket
       - S3BucketIAMInstanceProfile
     Properties:
-      ImageId: !Ref AMI
-      InstanceType: !Ref EC2InstanceType
-      SecurityGroupIds: 
-        - !Ref EC2InstanceSecurityGroup
-      SubnetId: !Ref PublicSubnet1
-      KeyName: soumya_sshkey
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeType: gp2
-            DeleteOnTermination: true
-            VolumeSize: 20
-      IamInstanceProfile: !Ref S3BucketIAMInstanceProfile
-      UserData:
-        Fn::Base64:
-          !Sub |
-          #!/bin/bash
-          DB_HOST=${RDSInstance.Endpoint.Address}
-          AWS_BUCKET_NAME=${S3Bucket}
-          DB_USERNAME=${DBUserName}
-          DB_PASSWORD=${DBPassword}
-          DB_NAME=${DBName}
-          sudo yum update -y
-          {
-            echo "DB_HOST=$DB_HOST"
-            echo "DB_PORT=3306"
-            echo "DB_USERNAME=$DB_USERNAME"
-            echo "DB_PASSWORD=$DB_PASSWORD"
-            echo "DB_NAME=$DB_NAME"
-            echo "PORT=3000"
-            echo "AWS_BUCKET_NAME=$AWS_BUCKET_NAME"
-          } >>/home/ec2-user/webservice/app.env
-          echo "Going to webservice directory and installing node application"
-          cd /home/ec2-user/webservice || exit
-          npm install
-          echo "Copying the node server service file to /etc/systemd/system/node-server.service"
-          sudo cp /home/ec2-user/webservice/nodeserver.service /etc/systemd/system/nodeserver.service
-          echo "Enabling and Starting the node server service"
-          sudo systemctl enable nodeserver.service
-          sudo systemctl start nodeserver.service
+      LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
+      LaunchTemplateData:
+        ImageId: !Ref AMI
+        InstanceType: !Ref EC2InstanceType
+        KeyName: soumya_sshkey
+        IamInstanceProfile:
+          Arn: !Sub 'arn:aws:iam::${AWS::AccountId}:instance-profile/${AWS::StackName}-LaunchTemplateIAMInstanceProfile'
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp2
+              DeleteOnTermination: true
+              VolumeSize: 20
+        SecurityGroupIds:
+          - !Ref EC2InstanceSecurityGroup
+        UserData:
+          Fn::Base64:
+            !Sub |
+            #!/bin/bash
+            DB_HOST=${RDSInstance.Endpoint.Address}
+            AWS_BUCKET_NAME=${S3Bucket}
+            DB_USERNAME=${DBUserName}
+            DB_PASSWORD=${DBPassword}
+            DB_NAME=${DBName}
+            {
+              echo "DB_HOST=$DB_HOST"
+              echo "DB_PORT=3306"
+              echo "DB_USERNAME=$DB_USERNAME"
+              echo "DB_PASSWORD=$DB_PASSWORD"
+              echo "DB_NAME=$DB_NAME"
+              echo "PORT=3000"
+              echo "AWS_BUCKET_NAME=$AWS_BUCKET_NAME"
+            } >>/home/ec2-user/webservice/app.env
+            echo "Going to webservice directory and installing node application"
+            cd /home/ec2-user/webservice || exit
+            npm install
+            echo "Copying the node server service file to /etc/systemd/system/node-server.service"
+            sudo cp /home/ec2-user/webservice/nodeserver.service /etc/systemd/system/nodeserver.service
+            echo "Enabling and Starting the node server service"
+            sudo systemctl enable nodeserver.service
+            sudo systemctl start nodeserver.service
+
+  # Create Auto Scaling Group with Launch Template
+  EC2AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - EC2LaunchTemplate
+      - LoadBalancerTargetGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${AWS::StackName}-auto-scaling-group'
+      AvailabilityZones:
+        - us-west-2a
+        - us-west-2b
+        - us-west-2c
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+      MinSize: 3
+      MaxSize: 5
+      DesiredCapacity: 3
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      Cooldown: '300'
       Tags:
+        - Key: Application
+          Value: WebApp
+          PropagateAtLaunch: "true"
         - Key: Name
-          Value: !Ref AWS::StackName
+          Value: !Sub '${AWS::StackName}-auto-scaling-group'
+          PropagateAtLaunch: "true"
+      TargetGroupARNs:
+        - !Ref LoadBalancerTargetGroup
+
+  # # Create Auto Scaling Policy for Scaling Out
+  # EC2AutoScalingPolicyForScalingOut:
+  #   Type: AWS::AutoScaling::ScalingPolicy
+  #   DependsOn:
+  #     - EC2AutoScalingGroup
+  #   Properties:
+  #     AutoScalingGroupName: !Ref EC2AutoScalingGroup
+  #     PolicyName: !Sub '${AWS::StackName}-auto-scaling-policy-for-scaling-out'
+  #     PolicyType: TargetTrackingScaling
+  #     TargetTrackingScalingPolicyConfiguration:
+  #       PredefinedMetricSpecification:
+  #         PredefinedMetricType: ASGAverageCPUUtilization
+  #       TargetValue: 5
+  
+  # # Create Auto Scaling Policy for Scaling In
+  # EC2AutoScalingPolicyForScalingIn:
+  #   Type: AWS::AutoScaling::ScalingPolicy
+  #   DependsOn:
+  #     - EC2AutoScalingGroup
+  #   Properties:
+  #     AutoScalingGroupName: !Ref EC2AutoScalingGroup
+  #     PolicyName: !Sub '${AWS::StackName}-auto-scaling-policy-for-scaling-in'
+  #     PolicyType: TargetTrackingScaling
+  #     TargetTrackingScalingPolicyConfiguration:
+  #       PredefinedMetricSpecification:
+  #         PredefinedMetricType: ASGAverageCPUUtilization
+  #       TargetValue: 3
 
 Outputs:
   VpcId:
