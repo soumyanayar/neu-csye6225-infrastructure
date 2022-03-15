@@ -44,6 +44,11 @@ Parameters:
     Default: "1pNxHsm7HlpCCrdDPESy"
     Description: "DB Password" 
 
+  HostName:
+    Type: String
+    Default: "dev.soumyanayar.me."
+    Description: "Hostname"
+
 Resources:
   myVPC:
     Type: AWS::EC2::VPC
@@ -596,6 +601,17 @@ Resources:
         - Name: AutoScalingGroupName
           Value: !Ref EC2AutoScalingGroup
 
+  # Route 53 A record  aliasing to the Load Balancer
+  myDNSRecord:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: "dev.soumyanayar.me."
+      RecordSets:
+        - Name: "dev.soumyanayar.me."
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt LoadBalancer.DNSName
+            HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
 
 Outputs:
   VpcId:

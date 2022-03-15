@@ -44,3 +44,4 @@
 - Create a stack `aws cloudformation deploy --profile dev --stack-name assignment5 --region us-west-2 --template-file ./csye6225-infra.yml --capabilities CAPABILITY_NAMED_IAM `
 - Delete a stack `aws cloudformation delete-stack --profile dev --stack-name test1 --region us-east-2`
 - Delete S3 Bucket `aws s3 rm s3://soumyanayar3-dev.soumyanayar.me --recursive`
+- `aws cloudformation validate-template --template-body file://Templates/csye6225-infra.yml --region us-west-2 ` To validate the template
