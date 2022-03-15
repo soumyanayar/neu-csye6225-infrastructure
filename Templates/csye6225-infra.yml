@@ -547,33 +547,55 @@ Resources:
       TargetGroupARNs:
         - !Ref LoadBalancerTargetGroup
 
-  # # Create Auto Scaling Policy for Scaling Out
-  # EC2AutoScalingPolicyForScalingOut:
-  #   Type: AWS::AutoScaling::ScalingPolicy
-  #   DependsOn:
-  #     - EC2AutoScalingGroup
-  #   Properties:
-  #     AutoScalingGroupName: !Ref EC2AutoScalingGroup
-  #     PolicyName: !Sub '${AWS::StackName}-auto-scaling-policy-for-scaling-out'
-  #     PolicyType: TargetTrackingScaling
-  #     TargetTrackingScalingPolicyConfiguration:
-  #       PredefinedMetricSpecification:
-  #         PredefinedMetricType: ASGAverageCPUUtilization
-  #       TargetValue: 5
+  # Create Auto Scaling Policy for Scaling Out
+  EC2AutoScalingPolicyForScalingOut:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      ScalingAdjustment: '1'
+      AutoScalingGroupName: !Ref EC2AutoScalingGroup
+
+  AvgCPUUp:
+    Type: AWS::CloudWatch::Alarm
+    Properties: 
+      AlarmDescription: !Sub '${AWS::StackName}-AVGCPUUP'
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 60
+      Statistic: Average
+      Threshold: 5.0
+      AlarmActions:
+        - !Ref EC2AutoScalingPolicyForScalingOut
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref EC2AutoScalingGroup
   
-  # # Create Auto Scaling Policy for Scaling In
-  # EC2AutoScalingPolicyForScalingIn:
-  #   Type: AWS::AutoScaling::ScalingPolicy
-  #   DependsOn:
-  #     - EC2AutoScalingGroup
-  #   Properties:
-  #     AutoScalingGroupName: !Ref EC2AutoScalingGroup
-  #     PolicyName: !Sub '${AWS::StackName}-auto-scaling-policy-for-scaling-in'
-  #     PolicyType: TargetTrackingScaling
-  #     TargetTrackingScalingPolicyConfiguration:
-  #       PredefinedMetricSpecification:
-  #         PredefinedMetricType: ASGAverageCPUUtilization
-  #       TargetValue: 3
+  EC2AutoScalingPolicyForScalingIn:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      ScalingAdjustment: '-1'
+      AutoScalingGroupName: !Ref EC2AutoScalingGroup
+
+  AvgCPUDown:
+    Type: AWS::CloudWatch::Alarm
+    Properties: 
+      AlarmDescription: !Sub '${AWS::StackName}-AVGCPUDOWN'
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 60
+      Statistic: Average
+      Threshold: 3.0
+      AlarmActions:
+        - !Ref EC2AutoScalingPolicyForScalingIn
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref EC2AutoScalingGroup
+
 
 Outputs:
   VpcId:
