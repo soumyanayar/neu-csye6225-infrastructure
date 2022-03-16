@@ -477,7 +477,7 @@ Resources:
       - S3Bucket
       - S3BucketIAMInstanceProfile
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
+      LaunchTemplateName: !Sub 'asg_launch_config'
       LaunchTemplateData:
         ImageId: !Ref AMI
         InstanceType: !Ref EC2InstanceType
@@ -565,7 +565,7 @@ Resources:
     Properties: 
       AlarmDescription: !Sub '${AWS::StackName}-AVGCPUUP'
       ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 1
+      EvaluationPeriods: 2
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Period: 60
@@ -589,7 +589,7 @@ Resources:
     Properties: 
       AlarmDescription: !Sub '${AWS::StackName}-AVGCPUDOWN'
       ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 1
+      EvaluationPeriods: 2
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Period: 60
@@ -605,9 +605,9 @@ Resources:
   myDNSRecord:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      HostedZoneName: "dev.soumyanayar.me."
+      HostedZoneName: !Ref HostName
       RecordSets:
-        - Name: "dev.soumyanayar.me."
+        - Name: !Ref HostName
           Type: A
           AliasTarget:
             DNSName: !GetAtt LoadBalancer.DNSName
