@@ -8,10 +8,10 @@ Parameters:
   EnvironmentName:
     Description: "Environment Name"
     Type: String
-    Default : "dev"
+    Default : "demo"
     AllowedValues:
       - dev
-      - prod
+      - demo
 
   EC2InstanceType:
     Type: String
@@ -44,10 +44,7 @@ Parameters:
     Default: "1pNxHsm7HlpCCrdDPESy"
     Description: "DB Password" 
 
-  HostName:
-    Type: String
-    Default: "dev.soumyanayar.me."
-    Description: "Hostname"
+
 
 Resources:
   myVPC:
@@ -534,7 +531,7 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
-      MinSize: 3
+      MinSize: 1
       MaxSize: 5
       DesiredCapacity: 3
       VPCZoneIdentifier:
@@ -605,9 +602,9 @@ Resources:
   myDNSRecord:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      HostedZoneName: !Ref HostName
+      HostedZoneName: !Join ['', [!Ref EnvironmentName,'.soumyanayar.me.' ]]
       RecordSets:
-        - Name: !Ref HostName
+        - Name: !Join ['', [!Ref EnvironmentName,'.soumyanayar.me.' ]]
           Type: A
           AliasTarget:
             DNSName: !GetAtt LoadBalancer.DNSName
