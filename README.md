@@ -44,3 +44,11 @@
 - Create a stack `aws cloudformation deploy --profile dev --stack-name assignment5 --region us-west-2 --template-file ./csye6225-infra.yml --capabilities CAPABILITY_NAMED_IAM `
 - Delete a stack `aws cloudformation delete-stack --profile dev --stack-name test1 --region us-east-2`
 - Delete S3 Bucket `aws s3 rm s3://soumyanayar3-dev.soumyanayar.me --recursive`
+- `aws cloudformation validate-template --template-body file://Templates/csye6225-infra.yml --region us-west-2 ` To validate the template
+
+## Assignment - 06
+- The goal of this assignment is to create a load balancer that dynamically creates the VMs or instances based on the CPU utilization.
+- The launch instance will have the AMI to refer to and the user data required to create new database in the RDS instance
+- An autoscaling group created will refer to the launch instance and it lives in the public subnets
+- Autoscaling groups attached to the Load balancer target group helps declare instances. We can define min, max an desired number of instances
+- Autoscaling policies can be attached to autoscaling group. Policy contains the rules for triggering the new or reducing the existing instance
