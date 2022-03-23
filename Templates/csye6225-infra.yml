@@ -21,7 +21,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-07ad12791b6cc204e"
+    Default: "ami-0f1c6573399a24e77"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
