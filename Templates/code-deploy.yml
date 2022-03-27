@@ -1,0 +1,33 @@
+Description: "CloudDeploy Infrastructure"
+Parameters:
+  CodeDeployS3Bucket:
+    Description: "CodeDeploy S3 Bucket"
+    Type: String
+    Default : "codedeploy-s3bucket-test1"
+Resources:
+  GithubActionsCodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: WebAppS3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket, "/*" ] ]
