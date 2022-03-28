@@ -44,11 +44,6 @@ Parameters:
     Default: "1pNxHsm7HlpCCrdDPESy"
     Description: "DB Password" 
 
-  CodeDeployS3Bucket:
-    Description: "CodeDeploy S3 Bucket"
-    Type: String
-    Default : "codedeploy-s3bucket-test1"
-
 
 Resources:
   myVPC:
@@ -356,17 +351,7 @@ Resources:
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket, "/*" ] ]
-        - PolicyName: CodeDeployS3Ec2
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:Get*
-                  - s3:List*
-                Resource:
-                  - !Join [ "", [ "arn:aws:s3:::", !Ref CodeDeployS3Bucket] ]
-                  - !Join [ "", [ "arn:aws:s3:::", !Ref CodeDeployS3Bucket, "/*" ] ]
+          
 
   # Create Iam Instance Profile
   S3BucketIAMInstanceProfile:
