@@ -5,7 +5,7 @@ Parameters:
     Type: String
     Default : "10.0.0.0/16"
   
-  EnvironmentName:
+  EnvironmentName:      
     Description: "Environment Name"
     Type: String
     Default : "demo"
@@ -19,9 +19,14 @@ Parameters:
     AllowedValues: [t2.micro]
     Description: "EC2Instance AMI"
 
+  CodeDeployS3Bucket:
+    Description: "CodeDeploy S3 Bucket"
+    Type: String
+    Default : code-deploy-s3-bucket-csye-6225-demo
+
   AMI:
     Type: String
-    Default: "ami-0914cfeed23802f51"
+    Default: "ami-0d590de3b79045657"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -43,7 +48,6 @@ Parameters:
     Type: String
     Default: "1pNxHsm7HlpCCrdDPESy"
     Description: "DB Password" 
-
 
 
 Resources:
@@ -352,6 +356,25 @@ Resources:
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket, "/*" ] ]
+      ManagedPolicyArns: 
+        - !Ref CodeDeployEC2ToS3Policy
+
+  CodeDeployEC2ToS3Policy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: CodeDeployEC2ToS3Policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:Get*
+              - s3:Put*
+              - s3:List*
+            Resource:
+              - !Join [ "", [ "arn:aws:s3:::", !Ref CodeDeployS3Bucket ] ]
+              - !Join [ "", [ "arn:aws:s3:::", !Ref CodeDeployS3Bucket, "/*" ] ]
+          
 
   # Create Iam Instance Profile
   S3BucketIAMInstanceProfile:
@@ -477,8 +500,9 @@ Resources:
               echo "DB_NAME=$DB_NAME"
               echo "PORT=3000"
               echo "AWS_BUCKET_NAME=$AWS_BUCKET_NAME"
-            } >>/home/ec2-user/webservice/app.env
+            } >>/home/ec2-user/app.env
             echo "Going to webservice directory and installing node application"
+            cp /home/ec2-user/app.env /home/ec2-user/webservice/app.env
             cd /home/ec2-user/webservice || exit
             npm install
             echo "Copying the node server service file to /etc/systemd/system/node-server.service"
@@ -486,6 +510,11 @@ Resources:
             echo "Enabling and Starting the node server service"
             sudo systemctl enable nodeserver.service
             sudo systemctl start nodeserver.service
+
+            sudo service codedeploy-agent status
+            if [ $? -ne 0 ]; then
+              sudo service codedeploy-agent start
+            fi
 
   # Create Auto Scaling Group with Launch Template
   EC2AutoScalingGroup:
