@@ -8,7 +8,7 @@ Parameters:
   EnvironmentName:      
     Description: "Environment Name"
     Type: String
-    Default : "dev"
+    Default : "demo"
     AllowedValues:
       - dev
       - demo
@@ -22,11 +22,11 @@ Parameters:
   CodeDeployS3Bucket:
     Description: "CodeDeploy S3 Bucket"
     Type: String
-    Default : code-deploy-s3-bucket-csye-6225"
+    Default : code-deploy-s3-bucket-csye-6225-demo
 
   AMI:
     Type: String
-    Default: "ami-0e1bba4fdde3b674a"
+    Default: "ami-0d590de3b79045657"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -372,8 +372,8 @@ Resources:
               - s3:Put*
               - s3:List*
             Resource:
-              - !Sub arn:aws:s3:::code-deploy-s3-bucket-csye-6225
-              - !Sub arn:aws:s3:::code-deploy-s3-bucket-csye-6225/*
+              - !Join [ "", [ "arn:aws:s3:::", !Ref CodeDeployS3Bucket ] ]
+              - !Join [ "", [ "arn:aws:s3:::", !Ref CodeDeployS3Bucket, "/*" ] ]
           
 
   # Create Iam Instance Profile

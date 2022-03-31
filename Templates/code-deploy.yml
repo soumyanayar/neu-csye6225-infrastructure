@@ -8,7 +8,7 @@ Parameters:
   CodeDeployS3Bucket:
     Description: "CodeDeploy S3 Bucket"
     Type: String
-    Default : "code-deploy-s3-bucket-csye-6225"
+    Default : "code-deploy-s3-bucket-csye-6225-demo"
 
   CodeDeployUser:
     Description: "UserName"
@@ -60,42 +60,6 @@ Resources:
         - Key: "Application"
           Value: "WebApp"
           Type: "KEY_AND_VALUE"
-
-#CodeDeploy-EC2-S3 Policy for the Server (EC2)
-  # CodeDeployEC2ToS3Role:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service:
-  #               - ec2.amazonaws.com
-  #           Action:
-  #             - sts:AssumeRole
-  #     ManagedPolicyArns: 
-  #       - !Ref CodeDeployEC2ToS3Policy
-       
-           
-  # CodeDeployEC2ToS3Policy:
-  #   Type: AWS::IAM::ManagedPolicy
-  #   Properties:
-  #     ManagedPolicyName: CodeDeployEC2ToS3Policy
-  #     PolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Effect: Allow
-  #           Action:
-  #             - s3:Get*
-  #             - s3:Put*
-  #             - s3:List*
-  #           Resource:
-  #             - !Join [ "", [ "arn:aws:s3:::", !Ref CodeDeployS3Bucket ] ]
-  #             - !Join [ "", [ "arn:aws:s3:::", !Ref CodeDeployS3Bucket, "/*" ] ]
-  #     Users:
-  #       - !Ref CodeDeployUser
-      
 
   # GH-Upload-To-S3 Policy for GitHub Actions to Upload to AWS S3
   GHUploadToS3Role:
