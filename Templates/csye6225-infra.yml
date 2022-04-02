@@ -26,7 +26,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-023678f92fad07d17"
+    Default: "ami-07861848352fa096c"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -545,8 +545,8 @@ Resources:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
       MinSize: 1
-      MaxSize: 1
-      DesiredCapacity: 1
+      MaxSize: 5
+      DesiredCapacity: 3
       VPCZoneIdentifier:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
