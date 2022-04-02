@@ -26,7 +26,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-0d590de3b79045657"
+    Default: "ami-023678f92fad07d17"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -358,6 +358,7 @@ Resources:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket, "/*" ] ]
       ManagedPolicyArns: 
         - !Ref CodeDeployEC2ToS3Policy
+        - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 
   CodeDeployEC2ToS3Policy:
     Type: AWS::IAM::ManagedPolicy
@@ -505,12 +506,24 @@ Resources:
             cp /home/ec2-user/app.env /home/ec2-user/webservice/app.env
             cd /home/ec2-user/webservice || exit
             npm install
+
+            # Copy cloudwatch agent config file
+            echo "Copying the cloudwatch agent config file to /opt/cloudwatch-config.json"
+            sudo cp /home/ec2-user/webservice/cloudwatch-config.json /opt/cloudwatch-config.json
+
+            # Configure CloudWatch Agent
+            echo "Configuring CloudWatch Agent"
+            sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/cloudwatch-config.json -s
+
+            sudo mkdir -p /home/ec2-user/webservice/logs
+            sudo touch /home/ec2-user/webservice/logs/csye6225.log
+            sudo chmod 775 /home/ec2-user/webservice/logs/csye6225.log
+
             echo "Copying the node server service file to /etc/systemd/system/node-server.service"
             sudo cp /home/ec2-user/webservice/nodeserver.service /etc/systemd/system/nodeserver.service
             echo "Enabling and Starting the node server service"
             sudo systemctl enable nodeserver.service
             sudo systemctl start nodeserver.service
-
             sudo service codedeploy-agent status
             if [ $? -ne 0 ]; then
               sudo service codedeploy-agent start
@@ -532,8 +545,8 @@ Resources:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
       MinSize: 1
-      MaxSize: 5
-      DesiredCapacity: 3
+      MaxSize: 1
+      DesiredCapacity: 1
       VPCZoneIdentifier:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
