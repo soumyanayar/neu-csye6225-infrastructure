@@ -26,7 +26,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-0195d2ed4ad7cc4ee"
+    Default: "ami-05a531e7a78ae175c"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -359,6 +359,8 @@ Resources:
       ManagedPolicyArns: 
         - !Ref CodeDeployEC2ToS3Policy
         - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
 
   CodeDeployEC2ToS3Policy:
     Type: AWS::IAM::ManagedPolicy
@@ -501,6 +503,8 @@ Resources:
               echo "DB_NAME=$DB_NAME"
               echo "PORT=3000"
               echo "AWS_BUCKET_NAME=$AWS_BUCKET_NAME"
+              echo "DYNAMO_DB_TABLE_NAME=DynamoDBTable"
+              echo "SNS_TOPIC_ARN=SnsTopicName"
             } >>/home/ec2-user/app.env
             echo "Going to webservice directory and installing node application"
             cp /home/ec2-user/app.env /home/ec2-user/webservice/app.env
@@ -545,8 +549,8 @@ Resources:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
       MinSize: 1
-      MaxSize: 5
-      DesiredCapacity: 3
+      MaxSize: 1
+      DesiredCapacity: 1
       VPCZoneIdentifier:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
