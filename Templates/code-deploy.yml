@@ -16,51 +16,6 @@ Parameters:
     Default : "ghactions"
 
 Resources:
-# Create Code Deploy Application
-  CodeDeployApplication: 
-    Type: AWS::CodeDeploy::Application
-    Properties:
-      ApplicationName: !Ref CodeDeployApp
-      ComputePlatform: Server
-
-# Create Code Deploy IAM Server Role
-  CodeDeployRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      Path: "/"
-      RoleName: "CodeDeployRoleForDeploymentGroup"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: codedeploy.amazonaws.com
-            Action: sts:AssumeRole
-      MaxSessionDuration: 3600
-      ManagedPolicyArns: 
-        - "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
-      Description: "Allows CodeDeploy to call AWS services such as Auto Scaling on your behalf."
-
-# Create Code Deploy Deployment Group
-  CodeDeployDeploymentGroup: 
-    Type: AWS::CodeDeploy::DeploymentGroup
-    Properties:
-      DeploymentGroupName: csye6225-webapp-deployment
-      ServiceRoleArn:  !GetAtt CodeDeployRole.Arn
-      ApplicationName: !Ref CodeDeployApplication
-      DeploymentConfigName: CodeDeployDefault.AllAtOnce
-      DeploymentStyle:
-        DeploymentType: "IN_PLACE"
-        DeploymentOption: "WITHOUT_TRAFFIC_CONTROL"
-      AutoRollbackConfiguration:
-        Enabled: true
-        Events:
-          - DEPLOYMENT_FAILURE
-      Ec2TagFilters:
-        - Key: "Application"
-          Value: "WebApp"
-          Type: "KEY_AND_VALUE"
-
   # GH-Upload-To-S3 Policy for GitHub Actions to Upload to AWS S3
   GHUploadToS3Role:
     Type: AWS::IAM::Role
