@@ -26,7 +26,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-0195d2ed4ad7cc4ee"
+    Default: "ami-0ffcdbadf938892ce"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -48,6 +48,11 @@ Parameters:
     Type: String
     Default: "1pNxHsm7HlpCCrdDPESy"
     Description: "DB Password" 
+
+  CodeDeployApp:
+    Description: "CodeDeploy Application"
+    Type: String
+    Default : "csye6225-webapp"
 
 
 Resources:
@@ -359,6 +364,8 @@ Resources:
       ManagedPolicyArns: 
         - !Ref CodeDeployEC2ToS3Policy
         - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
 
   CodeDeployEC2ToS3Policy:
     Type: AWS::IAM::ManagedPolicy
@@ -493,6 +500,9 @@ Resources:
             DB_USERNAME=${DBUserName}
             DB_PASSWORD=${DBPassword}
             DB_NAME=${DBName}
+            DYNAMO_DB_TABLE_NAME=${UserTokenDynamoDBTable}
+            AWS_REGION=${AWS::Region}
+            SNS_TOPIC_ARN=${SNSTopic}
             {
               echo "DB_HOST=$DB_HOST"
               echo "DB_PORT=3306"
@@ -501,33 +511,27 @@ Resources:
               echo "DB_NAME=$DB_NAME"
               echo "PORT=3000"
               echo "AWS_BUCKET_NAME=$AWS_BUCKET_NAME"
+              echo "DYNAMO_DB_TABLE_NAME=$DYNAMO_DB_TABLE_NAME"
+              echo "SNS_TOPIC_ARN=$SNS_TOPIC_ARN"
+              echo "AWS_REGION=$AWS_REGION"
             } >>/home/ec2-user/app.env
             echo "Going to webservice directory and installing node application"
-            cp /home/ec2-user/app.env /home/ec2-user/webservice/app.env
+            sudo cp /home/ec2-user/app.env /home/ec2-user/webservice/app.env
             cd /home/ec2-user/webservice || exit
-            npm install
 
-            # Copy cloudwatch agent config file
-            echo "Copying the cloudwatch agent config file to /opt/cloudwatch-config.json"
-            sudo cp /home/ec2-user/webservice/cloudwatch-config.json /opt/cloudwatch-config.json
-
-            # Configure CloudWatch Agent
-            echo "Configuring CloudWatch Agent"
-            sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/cloudwatch-config.json -s
-
-            sudo mkdir -p /home/ec2-user/webservice/logs
-            sudo touch /home/ec2-user/webservice/logs/csye6225.log
-            sudo chmod 775 /home/ec2-user/webservice/logs/csye6225.log
-
-            echo "Copying the node server service file to /etc/systemd/system/node-server.service"
-            sudo cp /home/ec2-user/webservice/nodeserver.service /etc/systemd/system/nodeserver.service
             echo "Enabling and Starting the node server service"
             sudo systemctl enable nodeserver.service
             sudo systemctl start nodeserver.service
+
+            sudo systemctl restart amazon-cloudwatch-agent
+
             sudo service codedeploy-agent status
             if [ $? -ne 0 ]; then
+              echo "codedeploy-agent service is not running. Therefore starting the service"
               sudo service codedeploy-agent start
             fi
+
+            
 
   # Create Auto Scaling Group with Launch Template
   EC2AutoScalingGroup:
@@ -622,6 +626,289 @@ Resources:
           AliasTarget:
             DNSName: !GetAtt LoadBalancer.DNSName
             HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+
+  CodeDeployApplication: 
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Ref CodeDeployApp
+      ComputePlatform: Server
+
+# Create Code Deploy IAM Server Role
+  CodeDeployRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      RoleName: "CodeDeployRoleForDeploymentGroup"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      ManagedPolicyArns: 
+        - "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+      Description: "Allows CodeDeploy to call AWS services such as Auto Scaling on your behalf."
+
+# Create Code Deploy Deployment Group
+  CodeDeployDeploymentGroup: 
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      DeploymentGroupName: csye6225-webapp-deployment
+      ServiceRoleArn:  !GetAtt CodeDeployRole.Arn
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
+      AutoScalingGroups:
+        - !Ref EC2AutoScalingGroup
+      DeploymentStyle:
+        DeploymentType: "IN_PLACE"
+        DeploymentOption: "WITHOUT_TRAFFIC_CONTROL"
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - "arn:aws:iam::aws:policy/AmazonSESFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+
+  # Create a Lambda Function
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: UserEmailTrackingDynamoDBTable
+    Properties:
+      Description: !Sub 'csye6225-Lambda-function'
+      FunctionName: !Sub 'csye6225-Lambda-function'
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: nodejs14.x
+      Timeout: 300
+      MemorySize: 128
+      Architectures:
+        - x86_64
+      PackageType: Zip
+      Environment:
+        Variables:
+          EmailTrackingDynamoDBTable: !Ref UserEmailTrackingDynamoDBTable
+          EmailTrackingDynamoDBRegion: !Ref AWS::Region
+          DomainEnvironment: !Ref EnvironmentName
+      Code:
+        ZipFile: |
+          const AWS = require("aws-sdk");
+          const checkIfEmailSentAlready = async (
+            dynamoDbClient,
+            emailTrackingDynamoDBTable,
+            userEmail
+          ) => {
+            const params = {
+              TableName: emailTrackingDynamoDBTable,
+              Key: {
+                email: userEmail,
+              },
+            };
+            const data = await dynamoDbClient.get(params).promise();
+            console.log("Data:", data);
+            if (data.Item) {
+              return true;
+            } else {
+              return false;
+            }
+          };
+
+          const logEmailSentToDynamoDB = async (
+            dynamoDbClient,
+            emailTrackingDynamoDBTable,
+            userEmail
+          ) => {
+            const params = {
+              TableName: emailTrackingDynamoDBTable,
+              Item: {
+                email: userEmail,
+              },
+            };
+            const data = await dynamoDbClient.put(params).promise();
+            console.log("Data:", data);
+          };
+
+          exports.handler = async (event, context, callback) => {
+            console.log("Received event:", JSON.stringify(event, null, 4));
+            const emailTrackingDynamoDBTable = process.env.EmailTrackingDynamoDBTable;
+            const emailTrackingDynamoDBRegion = process.env.EmailTrackingDynamoDBRegion;
+            const domainEnvironment = process.env.DomainEnvironment;
+
+            // Set the region
+            AWS.config.update({ region: emailTrackingDynamoDBRegion });
+
+            const dynamoDbClient = new AWS.DynamoDB.DocumentClient({
+              region: emailTrackingDynamoDBRegion,
+            });
+
+            const message = event.Records[0].Sns.Message;
+            console.log("Message received from SNS:", message);
+
+            const parsedMessage = JSON.parse(message);
+            console.log("Parsed message:", parsedMessage);
+            const messageType = parsedMessage.message_type;
+            console.log("Message type:", messageType);
+            const userToken = parsedMessage.userToken;
+            console.log("User token:", userToken);
+            const userEmail = parsedMessage.username;
+            console.log("Username:", userEmail);
+            const first_name = parsedMessage.first_name;
+            console.log("First name:", first_name);
+            const last_name = parsedMessage.last_name;
+            console.log("Last name:", last_name);
+
+            const emailAlreadySent = await checkIfEmailSentAlready(
+              dynamoDbClient,
+              emailTrackingDynamoDBTable,
+              userEmail
+            );
+
+            if (!emailAlreadySent) {
+              // Send email using AWS SES
+              console.log("Email is not already sent to the user: " + userEmail + ". Trying to send");
+              const ses = new AWS.SES();
+              const params = {
+                Destination: {
+                  ToAddresses: [userEmail],
+                },
+                Message: {
+                  Body: {
+                    Html: {
+                      Charset: "UTF-8",
+                      Data: `<p>Hello ${first_name} ${last_name},</p>
+                      <p>To verify your email address with ${domainEnvironment}.soumyanayar.me, Please click the following link: <a href="http://${domainEnvironment}.soumyanayar.me/v1/verifyUserEmail?email=${userEmail}&token=${userToken}">Verify Email</a> or paste the following link in the browser: http://${domainEnvironment}.soumyanayar.me/v1/verifyUserEmail?email=${userEmail}&token=${userToken}</p>`,
+                    },
+                  },
+                  Subject: {
+                    Charset: "UTF-8",
+                    Data: `Verify you user account for ${domainEnvironment}.soumyanayar.me`,
+                  },
+                },
+                Source: `userverification@${domainEnvironment}.soumyanayar.me`,
+              };
+
+              const data = await ses.sendEmail(params).promise();
+              console.log(data);
+              console.log("Email sent successfully");
+
+              await logEmailSentToDynamoDB(
+                dynamoDbClient,
+                emailTrackingDynamoDBTable,
+                userEmail
+              );
+              console.log("Email logged to DynamoDB");
+            } else {
+              console.log(
+                "Email already sent to user: " + userEmail + " No need to send again"
+              );
+            }
+            callback(null, "success");
+          };
+
+  # Create DynamoDB Table
+  UserTokenDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-UserTokenTable'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: username
+          AttributeType: S
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: tokenttl
+      KeySchema:
+        - AttributeName: username
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 20
+        WriteCapacityUnits: 20
+  
+  UserEmailTrackingDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'emailTrackingDynamoDBTable'
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 20
+        WriteCapacityUnits: 20
+
+  # Create SNS Topic
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-SNSTopic'
+      DisplayName: !Sub '${AWS::StackName}-SNSTopic'
+      Subscription:
+        - Endpoint: !GetAtt LambdaFunction.Arn
+          Protocol: "lambda"
+   
+
+  # Create SNS Topic Policy
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2008-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:Publish
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+            Resource: !Ref SNSTopic
+            Condition:
+              StringEquals:
+                AWS:SourceOwner: !Ref AWS::AccountId
+      Topics:
+        - !Ref SNSTopic
+      
+  # SNSSubscription:
+  #   Type: "AWS::SNS::Subscription"
+  #   Properties:
+  #     TopicArn: !Ref SNSTopic
+  #     Endpoint: !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-SNSTopic"
+  #     Protocol: "lambda"
+  #     Region: !Ref AWS::Region
+  
+  # Create Lambda Function Permission for SNS Topic
+  SNSTopicLambdaPermission:
+    DependsOn: LambdaFunction
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref SNSTopic
 
 Outputs:
   VpcId:
