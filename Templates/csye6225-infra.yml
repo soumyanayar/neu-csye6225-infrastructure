@@ -26,7 +26,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-0ffcdbadf938892ce"
+    Default: "ami-0c5f94fed2167e032"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -247,14 +247,13 @@ Resources:
 
   # Create RDS Parameter Group for MySQL
   RDSDBParameterGroup:
-    Type: 'AWS::RDS::DBParameterGroup'
+    Type: AWS::RDS::DBParameterGroup
     Properties:
       Description: CloudFormation Sample MySQL Parameter Group
       Family: mysql8.0
       Parameters:
         sql_mode: IGNORE_SPACE
         max_allowed_packet: 1024
-        innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}'
 
   # Create RDS Subnet Group in the VPC
   RDSSubnetGroup:
@@ -286,8 +285,9 @@ Resources:
       - RDSSecurityGroup
       - RDSSubnetGroup
       - RDSDBParameterGroup
+      - RdsKmsKey
     Properties:
-      DBInstanceClass: db.t2.micro
+      DBInstanceClass: db.t3.small
       DBInstanceIdentifier: !Ref DBInstanceIdentifierName
       DBName: !Ref DBName
       Engine: mysql
@@ -301,6 +301,40 @@ Resources:
         - !Ref RDSSecurityGroup
       DBParameterGroupName: !Ref RDSDBParameterGroup
       PubliclyAccessible: false
+      StorageEncrypted: true
+      KmsKeyId: !Ref RdsKmsKey
+
+  # Create a KMS Key
+  RdsKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub KMS Key for RDS
+      KeyPolicy:
+        Version: "2012-10-17"
+        Id: "kms-key-for-rds"      
+        Statement:
+          - Sid: "Allow IAM User permission for RDS Instance"
+            Effect: Allow
+            Principal:
+              AWS: !Join 
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref 'AWS::AccountId'
+                  - ':root'
+            Action:
+              - "kms:*"
+            Resource: "*"
+          - Sid: "Add service role"
+            Effect: Allow
+            Principal:
+              AWS: !Join 
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref 'AWS::AccountId'
+                  - ':role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS'
+            Action:
+              - "kms:*"
+            Resource: "*"
 
   # S3 bucket with encryption and lifecycle
   S3Bucket:
@@ -335,7 +369,7 @@ Resources:
               SSEAlgorithm: AES256
   
   # Create IAM Role for EC2 Instance with S3 Bucket Policy
-  S3BucketIAMRole:
+  Ec2InstanceIamRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -361,6 +395,16 @@ Resources:
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref S3Bucket, "/*" ] ]
+        # - PolicyName: RDSAccessEc2
+        #   PolicyDocument:
+        #     Version: '2012-10-17'
+        #     Statement:
+        #       - Effect: Allow
+        #         Action:
+        #           - sts:AssumeRole
+        #         Principal:
+        #           Service:
+        #             - rds.amazonaws.com
       ManagedPolicyArns: 
         - !Ref CodeDeployEC2ToS3Policy
         - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
@@ -385,14 +429,14 @@ Resources:
           
 
   # Create Iam Instance Profile
-  S3BucketIAMInstanceProfile:
+  Ec2InstanceIamProfile:
     Type: AWS::IAM::InstanceProfile
-    DependsOn: S3BucketIAMRole
+    DependsOn: Ec2InstanceIamRole
     Properties:
       InstanceProfileName: !Sub '${AWS::StackName}-LaunchTemplateIAMInstanceProfile'
       Path: /
       Roles:
-        - !Ref S3BucketIAMRole
+        - !Ref Ec2InstanceIamRole
 
   # Create Target Group for Load Balancer
   LoadBalancerTargetGroup:
@@ -474,7 +518,7 @@ Resources:
     DependsOn:
       - RDSInstance
       - S3Bucket
-      - S3BucketIAMInstanceProfile
+      - Ec2InstanceIamProfile
     Properties:
       LaunchTemplateName: !Sub 'asg_launch_config'
       LaunchTemplateData:
@@ -515,6 +559,10 @@ Resources:
               echo "SNS_TOPIC_ARN=$SNS_TOPIC_ARN"
               echo "AWS_REGION=$AWS_REGION"
             } >>/home/ec2-user/app.env
+
+            echo "Enable SSL to MySQL"
+            mysql -u $DB_USERNAME -p$DB_PASSWORD -h $DB_HOST -e "ALTER USER '$DB_USERNAME'@'%' REQUIRE SSL;"
+
             echo "Going to webservice directory and installing node application"
             sudo cp /home/ec2-user/app.env /home/ec2-user/webservice/app.env
             cd /home/ec2-user/webservice || exit
@@ -549,8 +597,8 @@ Resources:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
       MinSize: 1
-      MaxSize: 5
-      DesiredCapacity: 3
+      MaxSize: 1
+      DesiredCapacity: 1
       VPCZoneIdentifier:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
