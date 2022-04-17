@@ -26,7 +26,7 @@ Parameters:
 
   AMI:
     Type: String
-    Default: "ami-0c5f94fed2167e032"
+    Default: "ami-03231669f6d6a9e82"
     Description: "The AMI to use"
 
   DBInstanceIdentifierName:
@@ -53,6 +53,11 @@ Parameters:
     Description: "CodeDeploy Application"
     Type: String
     Default : "csye6225-webapp"
+
+  SSLCertificateId:
+    Type: String
+    Default: "bf0143c2-53b5-49f1-bb22-e0bfc7073dd9"
+    Description: "SSL Certificate Id"
 
 
 Resources:
@@ -506,8 +511,10 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref LoadBalancer
-      Port: 80
-      Protocol: HTTP
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Join [ "", [ "arn:aws:acm:", !Ref AWS::Region, ":", !Ref AWS::AccountId, ":certificate/", !Ref SSLCertificateId ] ]
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref LoadBalancerTargetGroup
@@ -840,7 +847,7 @@ Resources:
                     Html: {
                       Charset: "UTF-8",
                       Data: `<p>Hello ${first_name} ${last_name},</p>
-                      <p>To verify your email address with ${domainEnvironment}.soumyanayar.me, Please click the following link: <a href="http://${domainEnvironment}.soumyanayar.me/v1/verifyUserEmail?email=${userEmail}&token=${userToken}">Verify Email</a> or paste the following link in the browser: http://${domainEnvironment}.soumyanayar.me/v1/verifyUserEmail?email=${userEmail}&token=${userToken}</p>`,
+                      <p>To verify your email address with ${domainEnvironment}.soumyanayar.me, Please click the following link: <a href="https://${domainEnvironment}.soumyanayar.me/v1/verifyUserEmail?email=${userEmail}&token=${userToken}">Verify Email</a> or paste the following link in the browser: https://${domainEnvironment}.soumyanayar.me/v1/verifyUserEmail?email=${userEmail}&token=${userToken}</p>`,
                     },
                   },
                   Subject: {
